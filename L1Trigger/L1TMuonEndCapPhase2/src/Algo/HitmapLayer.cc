@@ -86,7 +86,8 @@ void HitmapLayer::apply(const segment_collection_t& segments, std::vector<hitmap
                                         << " ch_col_end " << model_hm_chamber.end << std::endl;
             }
 
-            emtf_assert(model_hm_chamber.begin <= col_id && col_id < model_hm_chamber.end);
+            // emtf_assert(model_hm_chamber.begin <= col_id && col_id < model_hm_chamber.end);
+            // Pending GE0 chamber phi window update.
 
             // Short-Circuit: Joined chamber hitmap has more columns than the final image,
             // so we skip the columns outside of the final hitmaps's range

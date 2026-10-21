@@ -10,9 +10,13 @@ namespace emtf::phase2 {
 
   class ME0TPSelector : public TPSelector {
   public:
+    explicit ME0TPSelector(const EMTFContext&);
+
     explicit ME0TPSelector(const EMTFContext&, const int&, const int&);
 
     ~ME0TPSelector() override = default;
+
+    void select(const TPEntry&, SectorTPCMap&) const final;
 
     void select(const TriggerPrimitive&, TPInfo, ILinkTPCMap&) const final;
 

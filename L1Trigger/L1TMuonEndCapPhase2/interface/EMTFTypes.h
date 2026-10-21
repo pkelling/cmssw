@@ -2,6 +2,7 @@
 #define L1Trigger_L1TMuonEndCapPhase2_EMTFTypes_h
 
 #include <array>
+#include <map>
 #include <vector>
 
 #include "ap_int.h"
@@ -19,8 +20,10 @@ namespace emtf::phase2 {
   // Trigger Primitives
   typedef L1TMuon::TriggerPrimitive TriggerPrimitive;
   typedef std::vector<TPEntry> TPCollection;
+  typedef std::map<int, std::map<int, TPCollection>> SectorTPCMap; // [endcap][sector]
   typedef std::map<int, TPCollection> BXTPCMap;
   typedef std::map<int, TPCollection> ILinkTPCMap;
+  typedef std::map<int, ILinkTPCMap> BXILinkTPCMap;  // [BX][link]
 
   // Hits
   typedef l1t::phase2::EMTFHit EMTFHit;

@@ -11,20 +11,20 @@
 #include "L1Trigger/L1TMuonEndCapPhase2/interface/Utils/CSCUtils.h"
 #include "L1Trigger/L1TMuonEndCapPhase2/interface/Utils/TPUtils.h"
 
-#include "L1Trigger/L1TMuonEndCapPhase2/interface/DAQ/ME0TPConverter.h"
+#include "L1Trigger/L1TMuonEndCapPhase2/interface/PrimConv/GE0TPConverter.h"
 
 using namespace emtf::phase2;
 
-ME0TPConverter::ME0TPConverter(const EMTFContext& context, const int& endcap, const int& sector)
+GE0TPConverter::GE0TPConverter(const EMTFContext& context, const int& endcap, const int& sector)
     : context_(context), endcap_(endcap), sector_(sector) {}
 
-void ME0TPConverter::convert(const TriggerPrimitive& tp, const TPInfo& tp_info, EMTFHit& hit) const {
+void GE0TPConverter::convert(const TriggerPrimitive& tp, const TPInfo& tp_info, EMTFHit& hit) const {
   // Unpack Id
   const auto& tp_hit_id = tp_info.hit_id;
   const int tp_segment_id = tp_info.segment_id;
 
   // Unpack trigger primitive
-  const auto& tp_det_id = tp.detId<ME0DetId>();
+  const auto& tp_det_id = tp.detId<GEMDetId>();
   const auto& tp_data = tp.getME0Data();
 
   // Unpack detector info
@@ -75,13 +75,15 @@ void ME0TPConverter::convert(const TriggerPrimitive& tp, const TPInfo& tp_info, 
   const int emtf_host = context_.host_lut_.lookup({tp_subsystem, tp_station, tp_ring});
   const int emtf_zones = context_.zone_lut_.getZones(emtf_host, emtf_theta);
 
-  emtf_assert((0 <= emtf_phi) and (emtf_phi < 5040));
+  // emtf_assert((0 <= emtf_phi) and (emtf_phi < 5040));  // Pending GE0 phi range update.
   emtf_assert((1 <= emtf_theta) and (emtf_theta < 128));
 
   // Get flags
   const bool tp_flag_neighbor = (tp_selection == TPSelection::kNeighbor);
   const bool tp_flag_substitute = tp_info.flag_substitute;
-  const bool tp_flag_valid = true;  // given by digi, not trigger_primitive :(
+  const bool tp_flag_valid =
+      (v3::kHitmapCropColStart * v3::kHitmapColFactor <= emtf_phi) &&
+      (emtf_phi < v3::kHitmapCropColStop * v3::kHitmapColFactor);
 
   // Set properties
   hit.setId(tp_hit_id);
@@ -121,7 +123,7 @@ void ME0TPConverter::convert(const TriggerPrimitive& tp, const TPInfo& tp_info, 
   hit.setGlobTime(tp_time);
 
   hit.setEmtfChamber(tp_ilink);
-  hit.setEmtfSegment(tp_segment_id);
+  hit.setEmtfSegment(tp_flag_valid ? tp_segment_id : -1);
   hit.setEmtfPhi(emtf_phi);
   hit.setEmtfBend(emtf_bend);
   hit.setEmtfTheta1(emtf_theta);

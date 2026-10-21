@@ -11,7 +11,7 @@
 #include "L1Trigger/L1TMuonEndCapPhase2/interface/Utils/CSCUtils.h"
 #include "L1Trigger/L1TMuonEndCapPhase2/interface/Utils/TPUtils.h"
 
-#include "L1Trigger/L1TMuonEndCapPhase2/interface/DAQ/CSCTPConverter.h"
+#include "L1Trigger/L1TMuonEndCapPhase2/interface/PrimConv/CSCTPConverter.h"
 
 using namespace emtf::phase2;
 

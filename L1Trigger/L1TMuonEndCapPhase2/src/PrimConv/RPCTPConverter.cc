@@ -13,7 +13,7 @@
 #include "L1Trigger/L1TMuonEndCapPhase2/interface/Utils/RPCUtils.h"
 #include "L1Trigger/L1TMuonEndCapPhase2/interface/Utils/TPUtils.h"
 
-#include "L1Trigger/L1TMuonEndCapPhase2/interface/DAQ/RPCTPConverter.h"
+#include "L1Trigger/L1TMuonEndCapPhase2/interface/PrimConv/RPCTPConverter.h"
 
 using namespace emtf::phase2;
 

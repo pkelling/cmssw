@@ -7,18 +7,12 @@
 #include "L1Trigger/L1TMuonEndCapPhase2/interface/EMTFContext.h"
 #include "L1Trigger/L1TMuonEndCapPhase2/interface/EMTFTypes.h"
 #include "L1Trigger/L1TMuonEndCapPhase2/interface/Algo/HitmapLayer.h"
-#include "L1Trigger/L1TMuonEndCapPhase2/interface/DAQ/CSCTPConverter.h"
-#include "L1Trigger/L1TMuonEndCapPhase2/interface/DAQ/CSCTPSelector.h"
-#include "L1Trigger/L1TMuonEndCapPhase2/interface/DAQ/RPCTPConverter.h"
-#include "L1Trigger/L1TMuonEndCapPhase2/interface/DAQ/RPCTPSelector.h"
-#include "L1Trigger/L1TMuonEndCapPhase2/interface/DAQ/GEMTPConverter.h"
-#include "L1Trigger/L1TMuonEndCapPhase2/interface/DAQ/GEMTPSelector.h"
-#include "L1Trigger/L1TMuonEndCapPhase2/interface/DAQ/ME0TPConverter.h"
-#include "L1Trigger/L1TMuonEndCapPhase2/interface/DAQ/ME0TPSelector.h"
-#include "L1Trigger/L1TMuonEndCapPhase2/interface/DAQ/GE0TPConverter.h"
-#include "L1Trigger/L1TMuonEndCapPhase2/interface/DAQ/GE0TPSelector.h"
-#include "L1Trigger/L1TMuonEndCapPhase2/interface/DAQ/TPConverters.h"
-#include "L1Trigger/L1TMuonEndCapPhase2/interface/DAQ/TPSelectors.h"
+#include "L1Trigger/L1TMuonEndCapPhase2/interface/PrimConv/CSCTPConverter.h"
+#include "L1Trigger/L1TMuonEndCapPhase2/interface/PrimConv/RPCTPConverter.h"
+#include "L1Trigger/L1TMuonEndCapPhase2/interface/PrimConv/GEMTPConverter.h"
+#include "L1Trigger/L1TMuonEndCapPhase2/interface/PrimConv/ME0TPConverter.h"
+#include "L1Trigger/L1TMuonEndCapPhase2/interface/PrimConv/GE0TPConverter.h"
+#include "L1Trigger/L1TMuonEndCapPhase2/interface/PrimConv/TPConverters.h"
 #include "L1Trigger/L1TMuonEndCapPhase2/interface/DAQ/TPrimitives.h"
 #include "L1Trigger/L1TMuonEndCapPhase2/interface/Utils/DebugUtils.h"
 #include "L1Trigger/L1TMuonEndCapPhase2/interface/Utils/CSCUtils.h"
@@ -28,32 +22,27 @@
 using namespace emtf::phase2;
 
 SectorProcessor::SectorProcessor(const EMTFContext& context, const int& endcap, const int& sector)
-    : context_(context), endcap_(endcap), sector_(sector), event_(nullptr), bx_(nullptr) {
+    : context_(context), endcap_(endcap), sector_(sector), tp_filter_(context), event_(nullptr) {
   // ===========================================================================
-  // Register Selectors/Converters
+  // Register Converters
   // ===========================================================================
   if (this->context_.config_.csc_en_) {
-    tp_selectors_[L1TMuon::kCSC] = std::make_unique<CSCTPSelector>(context_, endcap_, sector_);
     tp_converters_[L1TMuon::kCSC] = std::make_unique<CSCTPConverter>(context_, endcap_, sector_);
   }
 
   if (this->context_.config_.rpc_en_) {
-    tp_selectors_[L1TMuon::kRPC] = std::make_unique<RPCTPSelector>(context_, endcap_, sector_);
     tp_converters_[L1TMuon::kRPC] = std::make_unique<RPCTPConverter>(context_, endcap_, sector_);
   }
 
   if (this->context_.config_.gem_en_) {
-    tp_selectors_[L1TMuon::kGEM] = std::make_unique<GEMTPSelector>(context_, endcap_, sector_);
     tp_converters_[L1TMuon::kGEM] = std::make_unique<GEMTPConverter>(context_, endcap_, sector_);
   }
 
   if (this->context_.config_.me0_en_) {
-    tp_selectors_[L1TMuon::kME0] = std::make_unique<ME0TPSelector>(context_, endcap_, sector_);
     tp_converters_[L1TMuon::kME0] = std::make_unique<ME0TPConverter>(context_, endcap_, sector_);
   }
 
   if (this->context_.config_.ge0_en_) {
-    tp_selectors_[L1TMuon::kME0] = std::make_unique<GE0TPSelector>(context_, endcap_, sector_);
     tp_converters_[L1TMuon::kME0] = std::make_unique<GE0TPConverter>(context_, endcap_, sector_);
   }
 }
@@ -65,150 +54,83 @@ SectorProcessor::~SectorProcessor() {
 void SectorProcessor::configureEvent(const edm::Event& event) {
   // Event
   event_ = &event;
-  bx_ = nullptr;
-
-  // Reset Window Hits
-  bx_window_hits_.clear();
-  bx_ilink_tpc_maps_.clear();
 }
 
-void SectorProcessor::configureBx(const int& bx) {
-  // BX
-  bx_ = &bx;
-
-  // Reset BX Maps
-  bx_ilink_tpc_maps_.clear();
-
-  // Remove BX TPCollections that aren't in the bx window
-  // Note that the first entry in bx_window_hits is the earliest BX
-  const auto min_bx = this->context_.config_.min_bx_;
-  const auto delay_bx = this->context_.config_.bx_window_ - 1;
-  const auto pop_after_bx = min_bx + delay_bx;
-
-  if (pop_after_bx < bx) {
-    bx_window_hits_.erase(bx_window_hits_.begin());
-  }
-}
-
-void SectorProcessor::select(const TriggerPrimitive& tp, const TPInfo& tp_info) {
-  // Get TPSelector
-  auto tp_subsystem = tp.subsystem();
-
-  auto tp_selectors_it = tp_selectors_.find(tp_subsystem);
-
-  // Short-Circuit: Operation not supported
-  if (tp_selectors_it == tp_selectors_.end()) {
-    edm::LogWarning("L1TEMTFpp") << "TPCollector has been implemented, "
-                                 << "but there is no TPSelector for " << tp_subsystem;
-    return;
-  }
-
-  // Select TP that belongs to this Sector Processor
-  auto& bx_ilink_tpc_map = bx_ilink_tpc_maps_[tp_subsystem];  // reference to subsystem trigger primitive collection
-
-  tp_selectors_it->second->select(tp, tp_info, bx_ilink_tpc_map);
-}
-
-void SectorProcessor::process(EMTFHitCollection& out_hits,
+void SectorProcessor::process(const BXILinkTPCMap& bx_ilink_tpc_map,
+                              EMTFHitCollection& out_hits,
                               EMTFTrackCollection& out_tracks,
                               EMTFInputCollection& out_inputs) {
-  // ===========================================================================
-  // Merge subsystem selections
-  // ===========================================================================
-  ILinkTPCMap bx_ilink_tpc_map;
+  const auto min_bx = context_.config_.min_bx_;
+  const auto max_bx = context_.config_.max_bx_;
 
-  for (auto& [subsystem, ilink_tpc_map] : bx_ilink_tpc_maps_) {
-    copyTP(ilink_tpc_map, bx_ilink_tpc_map);
-  }
+  std::map<int, EMTFHitCollection> bx_hit_map;
 
-  // Free memory
-  bx_ilink_tpc_maps_.clear();
-
-  // ===========================================================================
-  // Convert trigger primitives to EMTF Hits
-  // ===========================================================================
-
-  // Convert tp into hits
-  EMTFHitCollection bx_hits;
-
-  convertTP(out_hits.size(), bx_ilink_tpc_map, bx_hits);
-
-  // Append to bx window hits
-  bx_window_hits_.push_back(bx_hits);
-
-  // Free memory
-  bx_ilink_tpc_map.clear();
-
-  // Record hits
-  out_hits.insert(out_hits.end(), bx_hits.begin(), bx_hits.end());
-
-  // ===========================================================================
-  // Current Algorithm only supports BX=0
-  // ===========================================================================
-
-  if ((*bx_) != 0) {
-    return;
-  }
-
-  // ===========================================================================
-  // Convert EMTF Hits to Segments
-  // ===========================================================================
-
-  // Init Segment to Hit Map
-  std::map<int, int> seg_to_hit;
-
-  // Convert bx window hits into segments
-  segment_collection_t segments;
-
-  populateSegments(bx_window_hits_, seg_to_hit, segments);
-
-  // Build Tracks
-  buildTracks(seg_to_hit, segments, false, out_tracks);  // With prompt setup
-  buildTracks(seg_to_hit, segments, true, out_tracks);   // With displaced setup
-
-  // ===========================================================================
-  // Record segments/hits used in track building
-  // ===========================================================================
-  if (!seg_to_hit.empty()) {
-    EMTFInput::hits_t hit_id_col;
-    EMTFInput::segs_t seg_id_col;
-
-    for (const auto& [seg_id, hit_id] : seg_to_hit) {
-      seg_id_col.push_back(seg_id);
-      hit_id_col.push_back(hit_id);
-    }
-
-    EMTFInput emtf_input;
-
-    const int endcap_pm = (endcap_ == 2) ? -1 : endcap_;  // 1: +endcap, -1: -endcap
-
-    emtf_input.setEndcap(endcap_pm);
-    emtf_input.setSector(sector_);
-    emtf_input.setBx(*bx_);
-    emtf_input.setHits(hit_id_col);
-    emtf_input.setSegs(seg_id_col);
-
-    out_inputs.push_back(emtf_input);
-  }
-}
-
-void SectorProcessor::copyTP(const ILinkTPCMap& source, ILinkTPCMap& target) const {
-  typedef typename ILinkTPCMap::iterator Iterator_t;
-  typedef typename ILinkTPCMap::mapped_type Collection_t;
-
-  for (auto& source_kv : source) {
-    std::pair<Iterator_t, bool> ins_res = target.insert(source_kv);
-
-    // Short-Circuit: Insertion succeeded, move on
-    if (ins_res.second) {
+  // Convert and record hits for BXs within the configured range.
+  for (const auto& [bx, ilink_tpc_map] : bx_ilink_tpc_map) {
+    if (bx < min_bx || bx > max_bx) {
       continue;
     }
 
-    // Merge into target collection
-    const Collection_t& source_col = source_kv.second;
-    Collection_t& target_col = ins_res.first->second;
+    auto& bx_hits = bx_hit_map[bx];
 
-    target_col.insert(target_col.end(), source_col.begin(), source_col.end());
+    // Filter TPs, then convert accepted entries into hits.
+    const auto filtered_tps = tp_filter_.filter(ilink_tpc_map);
+    convertTP(out_hits.size(), filtered_tps, bx_hits);
+
+    // Record hits
+    out_hits.insert(out_hits.end(), bx_hits.begin(), bx_hits.end());
+  }
+
+  // Populate segments and build tracks from the converted BX collections.
+  for (const auto& [bx, bx_hits] : bx_hit_map) {
+    // ===========================================================================
+    // Current Algorithm only supports BX=0
+    // ===========================================================================
+
+    if (bx != 0) {
+      continue;
+    }
+
+    // ===========================================================================
+    // Convert EMTF Hits to Segments
+    // ===========================================================================
+
+    // Init Segment to Hit Map
+    std::map<int, int> seg_to_hit;
+
+    // Convert current BX hits into segments
+    segment_collection_t segments;
+
+    populateSegments(bx, bx_hits, seg_to_hit, segments);
+
+    // Build Tracks
+    buildTracks(bx, seg_to_hit, segments, false, out_tracks);  // With prompt setup
+    buildTracks(bx, seg_to_hit, segments, true, out_tracks);   // With displaced setup
+
+    // ===========================================================================
+    // Record segments/hits used in track building
+    // ===========================================================================
+    if (!seg_to_hit.empty()) {
+      EMTFInput::hits_t hit_id_col;
+      EMTFInput::segs_t seg_id_col;
+
+      for (const auto& [seg_id, hit_id] : seg_to_hit) {
+        seg_id_col.push_back(seg_id);
+        hit_id_col.push_back(hit_id);
+      }
+
+      EMTFInput emtf_input;
+
+      const int endcap_pm = (endcap_ == 2) ? -1 : endcap_;  // 1: +endcap, -1: -endcap
+
+      emtf_input.setEndcap(endcap_pm);
+      emtf_input.setSector(sector_);
+      emtf_input.setBx(bx);
+      emtf_input.setHits(hit_id_col);
+      emtf_input.setSegs(seg_id_col);
+
+      out_inputs.push_back(emtf_input);
+    }
   }
 }
 
@@ -239,12 +161,17 @@ void SectorProcessor::convertTP(const int& initial_hit_id, const ILinkTPCMap& il
       }
 
       // Set Segment Id
-      tp_info.segment_id = cnt_segments++;  // Save and increase segment count
+      tp_info.segment_id = cnt_segments;
 
       // Convert
       EMTFHit hit;
 
       tp_converters_it->second->convert(tp, tp_info, hit);
+
+      // Invalid GE0 hits remain in the output but do not consume a segment slot.
+      if (hit.flagValid()) {
+        ++cnt_segments;
+      }
 
       // Append to hit collections
       if (tp_info.flag_substitute) {
@@ -266,7 +193,8 @@ void SectorProcessor::convertTP(const int& initial_hit_id, const ILinkTPCMap& il
   }
 }
 
-void SectorProcessor::populateSegments(const std::vector<EMTFHitCollection>& bx_window_hits,
+void SectorProcessor::populateSegments(int bx,
+                                       const EMTFHitCollection& bx_hits,
                                        std::map<int, int>& seg_to_hit,
                                        segment_collection_t& segments) {
   // Initialize
@@ -286,102 +214,85 @@ void SectorProcessor::populateSegments(const std::vector<EMTFHitCollection>& bx_
     segments[seg_id].valid = 0;
   }
 
-  // Populate
-  auto bx_window_hits_rit = bx_window_hits.rbegin();
-  auto bx_window_hits_rend = bx_window_hits.rend();
+  // Populate from the current BX only.
+  for (const auto& hit : bx_hits) {  // Begin loop hits in BX
+    // Unpack Hit
+    const auto& hit_chamber = hit.emtfChamber();
+    const auto& hit_segment = hit.emtfSegment();
+    const auto& hit_valid = hit.flagValid();
 
-  std::map<int, unsigned int> next_ch_seg;
-
-  for (; bx_window_hits_rit != bx_window_hits_rend;
-       ++bx_window_hits_rit) {  // Begin loop from latest BX Collection to oldest BX Hit Collection
-
-    const auto& bx_hits = *bx_window_hits_rit;
-    std::map<int, unsigned int> bx_last_ch_seg;
-
-    for (const auto& hit : bx_hits) {  // Begin loop hits in BX
-      // Unpack Hit
-      const auto& hit_chamber = hit.emtfChamber();
-      const auto& hit_segment = hit.emtfSegment();
-      const auto& hit_valid = hit.flagValid();
-
-      emtf_assert(hit_valid);  // segment must be valid
-
-      // Get Channel Segment Count
-      unsigned int ch_seg = next_ch_seg[hit_chamber] + hit_segment;
-
-      // Short-Circuit: Accept at most 2 segments
-      if (!(ch_seg < v3::kChamberSegments)) {
-        continue;
-      }
-
-      // Calculate Host
-      const auto& hit_host = hit.emtfHost();
-
-      // Calculate Relative BX
-      // Note: Uses Hit BX relative to Sector Processor BX
-      const auto& hit_bx = hit.bx();
-      const int hit_rel_bx = (hit_bx - *bx_);
-
-      // Short-Circuit: Only use Relative BX=0 Segments
-      if (hit_rel_bx != 0) {
-        continue;
-      }
-
-      // Calculate Timezone
-      const auto hit_timezones = context_.timezone_lut_.getTimezones(hit_host, hit_rel_bx);
-
-      // Calculate algo seg
-      const unsigned int seg_id = hit_chamber * v3::kChamberSegments + ch_seg;
-
-      emtf_assert(seg_id < v3::kNumSegments);
-
-      seg_to_hit[seg_id] = hit.id();
-
-      // Populate segment
-      segments[seg_id].phi = hit.emtfPhi();
-      segments[seg_id].bend = hit.emtfBend();
-      segments[seg_id].theta1 = hit.emtfTheta1();
-      segments[seg_id].theta2 = hit.emtfTheta2();
-      segments[seg_id].qual1 = hit.emtfQual1();
-      segments[seg_id].qual2 = hit.emtfQual2();
-      segments[seg_id].time = hit.emtfTime();
-      segments[seg_id].zones = hit.emtfZones();
-      segments[seg_id].tzones = hit_timezones;
-      segments[seg_id].cscfr = hit.cscFR();
-      segments[seg_id].layer = hit.layer();
-      segments[seg_id].bx = hit.bx();
-      segments[seg_id].valid = hit.flagValid();
-
-      // Debug Info
-      if (this->context_.config_.verbosity_ > 1) {
-        edm::LogInfo("L1TEMTFpp") << std::endl
-                                  << "Event: " << event_->id() << " Endcap: " << endcap_ << " Sector: " << sector_
-                                  << " BX: " << (*bx_) << " Hit iLink: " << hit_chamber << " Hit iSeg: " << ch_seg
-                                  << " Hit Host " << hit_host << " Hit Rel BX " << (hit_bx - *bx_) << " Hit Timezones "
-                                  << hit_timezones << std::endl;
-
-        edm::LogInfo("L1TEMTFpp") << " id " << seg_id << " phi " << segments[seg_id].phi << " bend "
-                                  << segments[seg_id].bend << " theta1 " << segments[seg_id].theta1 << " theta2 "
-                                  << segments[seg_id].theta2 << " qual1 " << segments[seg_id].qual1 << " qual2 "
-                                  << segments[seg_id].qual2 << " time " << segments[seg_id].time << " zones "
-                                  << segments[seg_id].zones << " timezones " << segments[seg_id].tzones << " cscfr "
-                                  << segments[seg_id].cscfr << " layer " << segments[seg_id].layer << " bx "
-                                  << segments[seg_id].bx << " valid " << segments[seg_id].valid << std::endl;
-      }
-
-      // Update bx chamber last segment
-      bx_last_ch_seg[hit_chamber] = ch_seg;
-    }  // End loop hits from BX
-
-    for (auto& [chamber, ch_seg] : bx_last_ch_seg) {
-      next_ch_seg[chamber] = ch_seg + 1;
+    if (!hit_valid) {
+      continue;
     }
 
-    bx_last_ch_seg.clear();
-  }  // End loop from latest BX Collection to oldest BX Hit Collection
+    // Get Channel Segment Count
+    const unsigned int ch_seg = hit_segment;
+
+    // Short-Circuit: Accept at most 2 segments
+    if (!(ch_seg < v3::kChamberSegments)) {
+      continue;
+    }
+
+    // Calculate Host
+    const auto& hit_host = hit.emtfHost();
+
+    // Calculate Relative BX
+    // Note: Uses Hit BX relative to Sector Processor BX
+    const auto& hit_bx = hit.bx();
+    const int hit_rel_bx = (hit_bx - bx);
+
+    // Short-Circuit: Only use Relative BX=0 Segments
+    if (hit_rel_bx != 0) {
+      continue;
+    }
+
+    // Calculate Timezone
+    const auto hit_timezones = context_.timezone_lut_.getTimezones(hit_host, hit_rel_bx);
+
+    // Calculate algo seg
+    const unsigned int seg_id = hit_chamber * v3::kChamberSegments + ch_seg;
+
+    emtf_assert(seg_id < v3::kNumSegments);
+
+    seg_to_hit[seg_id] = hit.id();
+
+    // Populate segment
+    segments[seg_id].phi = hit.emtfPhi();
+    segments[seg_id].bend = hit.emtfBend();
+    segments[seg_id].theta1 = hit.emtfTheta1();
+    segments[seg_id].theta2 = hit.emtfTheta2();
+    segments[seg_id].qual1 = hit.emtfQual1();
+    segments[seg_id].qual2 = hit.emtfQual2();
+    segments[seg_id].time = hit.emtfTime();
+    segments[seg_id].zones = hit.emtfZones();
+    segments[seg_id].tzones = hit_timezones;
+    segments[seg_id].cscfr = hit.cscFR();
+    segments[seg_id].layer = hit.layer();
+    segments[seg_id].bx = hit.bx();
+    segments[seg_id].valid = hit.flagValid();
+
+    // Debug Info
+    if (this->context_.config_.verbosity_ > 1) {
+      edm::LogInfo("L1TEMTFpp") << std::endl
+                                << "Event: " << event_->id() << " Endcap: " << endcap_ << " Sector: " << sector_
+                                << " BX: " << bx << " Hit iLink: " << hit_chamber << " Hit iSeg: " << ch_seg
+                                << " Hit Host " << hit_host << " Hit Rel BX " << (hit_bx - bx) << " Hit Timezones "
+                                << hit_timezones << std::endl;
+
+      edm::LogInfo("L1TEMTFpp") << " id " << seg_id << " phi " << segments[seg_id].phi << " bend "
+                                << segments[seg_id].bend << " theta1 " << segments[seg_id].theta1 << " theta2 "
+                                << segments[seg_id].theta2 << " qual1 " << segments[seg_id].qual1 << " qual2 "
+                                << segments[seg_id].qual2 << " time " << segments[seg_id].time << " zones "
+                                << segments[seg_id].zones << " timezones " << segments[seg_id].tzones << " cscfr "
+                                << segments[seg_id].cscfr << " layer " << segments[seg_id].layer << " bx "
+                                << segments[seg_id].bx << " valid " << segments[seg_id].valid << std::endl;
+    }
+
+  }
 }
 
-void SectorProcessor::buildTracks(const std::map<int, int>& seg_to_hit,
+void SectorProcessor::buildTracks(int bx,
+                                  const std::map<int, int>& seg_to_hit,
                                   const segment_collection_t& segments,
                                   const bool& displaced_en,
                                   EMTFTrackCollection& out_tracks) {
@@ -414,7 +325,7 @@ void SectorProcessor::buildTracks(const std::map<int, int>& seg_to_hit,
   // Apply Output Layer
   EMTFTrackCollection bx_tracks;
 
-  context_.output_layer_.apply(endcap_, sector_, *bx_, seg_to_hit, tracks, displaced_en, bx_tracks);
+  context_.output_layer_.apply(endcap_, sector_, bx, seg_to_hit, tracks, displaced_en, bx_tracks);
 
   // Record tracks
   out_tracks.insert(out_tracks.end(), bx_tracks.begin(), bx_tracks.end());

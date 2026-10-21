@@ -1,18 +1,18 @@
-#ifndef L1Trigger_L1TMuonEndCapPhase2_GEMTPConverter_h
-#define L1Trigger_L1TMuonEndCapPhase2_GEMTPConverter_h
+#ifndef L1Trigger_L1TMuonEndCapPhase2_RPCTPConverter_h
+#define L1Trigger_L1TMuonEndCapPhase2_RPCTPConverter_h
 
 #include "L1Trigger/L1TMuonEndCapPhase2/interface/EMTFfwd.h"
 #include "L1Trigger/L1TMuonEndCapPhase2/interface/EMTFTypes.h"
 #include "L1Trigger/L1TMuonEndCapPhase2/interface/DAQ/TPrimitives.h"
-#include "L1Trigger/L1TMuonEndCapPhase2/interface/DAQ/TPConverters.h"
+#include "L1Trigger/L1TMuonEndCapPhase2/interface/PrimConv/TPConverters.h"
 
 namespace emtf::phase2 {
 
-  class GEMTPConverter : public TPConverter {
+  class RPCTPConverter : public TPConverter {
   public:
-    explicit GEMTPConverter(const EMTFContext&, const int&, const int&);
+    explicit RPCTPConverter(const EMTFContext&, const int&, const int&);
 
-    ~GEMTPConverter() override = default;
+    ~RPCTPConverter() override = default;
 
     void convert(const TriggerPrimitive&, const TPInfo&, EMTFHit&) const final;
 
@@ -24,4 +24,4 @@ namespace emtf::phase2 {
 
 }  // namespace emtf::phase2
 
-#endif  // L1Trigger_L1TMuonEndCapPhase2_GEMTPConverter_h
+#endif  // L1Trigger_L1TMuonEndCapPhase2_RPCTPConverter_h

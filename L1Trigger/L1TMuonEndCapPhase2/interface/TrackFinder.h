@@ -27,10 +27,15 @@ namespace emtf::phase2 {
     void onJobEnd();
 
   private:
+    void printDebuggingTPs(const TPCollection&,
+                           const std::map<int, std::map<int, BXILinkTPCMap>>&) const;
+
     EMTFContext context_;
 
     std::vector<std::unique_ptr<TPCollector>> tp_collectors_;
-    std::vector<std::unique_ptr<SectorProcessor>> sector_processors_;
+    std::map<SubsystemType, std::unique_ptr<TPSelector>> tp_selectors_;
+    // Sector processors are organized by [endcap][sector].
+    std::map<int, std::map<int, std::unique_ptr<SectorProcessor>>> sector_processors_;
   };
 }  // namespace emtf::phase2
 

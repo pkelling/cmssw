@@ -39,6 +39,7 @@ void L1TMuonEndCapPhase2TrackProducer::fillDescriptions(edm::ConfigurationDescri
   // Bunch-Crossing Settings
   desc.add<int>("MinBX", -2);
   desc.add<int>("MaxBX", 2);
+  // Retained for configuration compatibility; BX window support is currently disabled.
   desc.add<int>("BXWindow", 1);
 
   desc.add<int>("CSCInputBXShift", -8);

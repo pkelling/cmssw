@@ -18,13 +18,7 @@ GE0TPCollector::GE0TPCollector(const EMTFContext& context, edm::ConsumesCollecto
       input_token_(i_consumes_collector.consumes<GE0Tag::collection_type>(context.config_.ge0_input_)) {}
 
 void GE0TPCollector::collect(const edm::Event& i_event, BXTPCMap& bx_tpc_map) const {
-  // Constants
-  // First quarter of GE0 chamber (5 deg) and last quarter
   static const int me0_max_partition = 9;
-  static const int me0_nstrips = 384;
-  static const int me0_nphipositions = me0_nstrips * 2;
-  static const int phiposition_q1 = me0_nphipositions / 4;
-  static const int phiposition_q3 = (me0_nphipositions / 4) * 3;
 
   // Read GE0 digis
   TPCollection tpc;
@@ -52,11 +46,11 @@ void GE0TPCollector::collect(const edm::Event& i_event, BXTPCMap& bx_tpc_map) co
     const int tp_region = tp_det_id.region();                    // 0: barrel, +/-1: endcap
     const int tp_endcap = (tp_region == -1) ? 2 : tp_region;     // 1: +endcap, 2: -endcap
     const int tp_endcap_pm = (tp_endcap == 2) ? -1 : tp_endcap;  // 1: +endcap, -1: -endcap
-    const int tp_station = 1;                                    // ME0DetId station was always 1!
+    const int tp_station = 1;
     const int tp_ring = 4;
     const int tp_layer = tp_det_id.layer();
     const int tp_roll = tp_det_id.roll();
-    const int tp_me0_chamber = tp_det_id.chamber();
+    const int tp_chamber = tp_det_id.chamber();
 
     const int tp_pad = tp_data.phiposition;
     const int tp_partition = tp_data.partition;
@@ -67,40 +61,12 @@ void GE0TPCollector::collect(const edm::Event& i_event, BXTPCMap& bx_tpc_map) co
       continue;
     }
 
-    // Calculate EMTF Info
-    // Split 20-deg chamber into 10-deg chamber
-    // GE0 chamber is rotated by -5 deg relative to CSC chamber.
-    // GE0 chamber 1 starts at -10 deg, CSC chamber 1 starts at -5 deg.
-    const int tp_phiposition = tp_data.phiposition;  // in half-strip unit
-
-    int tp_chamber = (tp_me0_chamber - 1) * 2 + 1;
-
-    if (tp_endcap == 1) {
-      // positive endcap
-      // phiposition increases counter-clockwise
-      if (tp_phiposition < phiposition_q1) {
-        tp_chamber = csc::getNext10DegChamber(tp_chamber);
-      } else if (tp_phiposition < phiposition_q3) {
-        // Do nothing
-      } else {
-        tp_chamber = csc::getPrev10DegChamber(tp_chamber);
-      }
-    } else {
-      // negative endcap
-      // phiposition increases clockwise
-      if (tp_phiposition < phiposition_q1) {
-        tp_chamber = csc::getPrev10DegChamber(tp_chamber);
-      } else if (tp_phiposition < phiposition_q3) {
-        // Do nothing
-      } else {
-        tp_chamber = csc::getNext10DegChamber(tp_chamber);
-      }
-    }
-
-    const int tp_sector = csc::getTriggerSector(tp_station, tp_ring, tp_chamber);
-    const int tp_subsector = csc::getTriggerSubsector(tp_station, tp_chamber);
-    const int tp_csc_id = csc::getId(tp_station, tp_ring, tp_chamber);
-    const auto tp_csc_facing = csc::getFaceDirection(tp_station, tp_ring, tp_chamber);
+    // GE0 chamber 1 starts at 0 degrees. Use 20-degree CSC numbering for routing,
+    // while retaining the GE0 station, ring, and physical chamber in TPInfo.
+    const int tp_sector = csc::getTriggerSector(2, 1, tp_chamber);
+    const int tp_subsector = 0;
+    const int tp_csc_id = csc::getId(2, 1, tp_chamber);
+    const auto tp_csc_facing = csc::Facing::kNone;
 
     // Assertion checks
     emtf_assert(kMinEndcap <= tp_endcap && tp_endcap <= kMaxEndcap);
@@ -130,5 +96,47 @@ void GE0TPCollector::collect(const edm::Event& i_event, BXTPCMap& bx_tpc_map) co
     tp_entry.info_.csc_facing = tp_csc_facing;
 
     bx_tpc_map[tp_bx].push_back(tp_entry);
+  }
+}
+
+void GE0TPCollector::collect(const edm::Event& i_event, TPCollection& tpc) const {
+  edm::Handle<GE0Tag::collection_type> ge0_digis;
+  i_event.getByToken(input_token_, ge0_digis);
+
+  for (auto chamber = ge0_digis->begin(); chamber != ge0_digis->end(); ++chamber) {
+    for (auto digi = (*chamber).second.first; digi != (*chamber).second.second; ++digi) {
+      tpc.emplace_back((*chamber).first, *digi);
+      auto& info = tpc.back().info_;
+      const auto& det_id = tpc.back().tp_.detId<GEMDetId>();
+      const auto& data = tpc.back().tp_.getME0Data();
+
+      const int region = det_id.region();
+      info.bx = data.bx + context_.config_.me0_bx_shift_;
+      info.endcap = (region == -1) ? 2 : region;
+      info.endcap_pm = (info.endcap == 2) ? -1 : info.endcap;
+      info.station = 1;
+      info.ring = 4;
+      info.layer = det_id.layer();
+      info.roll = det_id.roll();
+      info.chamber = det_id.chamber();
+
+      // GE0 uses the same sector assignment as a 20-degree CSC chamber (Station 2, ring 1)
+      info.sector = csc::getTriggerSector(2, 1, info.chamber);
+      info.subsector = 0;
+      info.csc_id = csc::getId(2, 1, info.chamber);
+      info.csc_facing = csc::Facing::kNone;
+
+#ifdef EMTF_ALLOW_ASSERT
+      emtf_assert(kMinEndcap <= info.endcap && info.endcap <= kMaxEndcap);
+      emtf_assert(kMinTrigSector <= info.sector && info.sector <= kMaxTrigSector);
+      emtf_assert(info.subsector == 0);
+      emtf_assert(info.station == 1);
+      emtf_assert(info.ring == 4);
+      emtf_assert(1 <= info.chamber && info.chamber <= 18);
+      emtf_assert(1 <= info.csc_id && info.csc_id <= 3);
+      emtf_assert(0 <= data.phiposition && data.phiposition <= 767);
+      emtf_assert(0 <= data.partition && data.partition <= 15);
+#endif
+    }
   }
 }

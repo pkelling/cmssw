@@ -6,7 +6,7 @@
 #include "L1Trigger/L1TMuonEndCapPhase2/interface/EMTFfwd.h"
 #include "L1Trigger/L1TMuonEndCapPhase2/interface/EMTFTypes.h"
 #include "L1Trigger/L1TMuonEndCapPhase2/interface/DAQ/TPrimitives.h"
-#include "L1Trigger/L1TMuonEndCapPhase2/interface/DAQ/TPConverters.h"
+#include "L1Trigger/L1TMuonEndCapPhase2/interface/PrimConv/TPConverters.h"
 
 namespace emtf::phase2 {
 

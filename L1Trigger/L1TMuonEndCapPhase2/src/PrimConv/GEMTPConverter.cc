@@ -11,24 +11,24 @@
 #include "L1Trigger/L1TMuonEndCapPhase2/interface/Utils/CSCUtils.h"
 #include "L1Trigger/L1TMuonEndCapPhase2/interface/Utils/TPUtils.h"
 
-#include "L1Trigger/L1TMuonEndCapPhase2/interface/DAQ/GE0TPConverter.h"
+#include "L1Trigger/L1TMuonEndCapPhase2/interface/PrimConv/GEMTPConverter.h"
 
 using namespace emtf::phase2;
 
-GE0TPConverter::GE0TPConverter(const EMTFContext& context, const int& endcap, const int& sector)
+GEMTPConverter::GEMTPConverter(const EMTFContext& context, const int& endcap, const int& sector)
     : context_(context), endcap_(endcap), sector_(sector) {}
 
-void GE0TPConverter::convert(const TriggerPrimitive& tp, const TPInfo& tp_info, EMTFHit& hit) const {
+void GEMTPConverter::convert(const TriggerPrimitive& tp, const TPInfo& tp_info, EMTFHit& hit) const {
   // Unpack Id
   const auto& tp_hit_id = tp_info.hit_id;
-  const int tp_segment_id = tp_info.segment_id;
+  const auto& tp_segment_id = tp_info.segment_id;
 
   // Unpack trigger primitive
   const auto& tp_det_id = tp.detId<GEMDetId>();
-  const auto& tp_data = tp.getME0Data();
+  const auto& tp_data = tp.getGEMData();
 
   // Unpack detector info
-  const auto tp_subsystem = L1TMuon::kME0;
+  const auto tp_subsystem = L1TMuon::kGEM;
 
   const int tp_raw_id = tp_det_id.rawId();
 
@@ -36,30 +36,35 @@ void GE0TPConverter::convert(const TriggerPrimitive& tp, const TPInfo& tp_info, 
   const int tp_subsector = tp_info.subsector;
   const int tp_station = tp_info.station;
   const int tp_ring = tp_info.ring;
+  const int tp_roll = tp_info.roll;
   const int tp_layer = tp_info.layer;
-  // const int tp_chamber = tp_info.chamber;
+  const int tp_chamber = tp_info.chamber;
 
-  const int tp_csc_id = tp_info.csc_id;
   const auto tp_csc_facing = tp_info.csc_facing;
+  const int tp_csc_id = tp_info.csc_id;
 
   // Unpack data
-  const int tp_phiposition = tp_data.phiposition;  // in half-strip unit
-  const int tp_partition = tp_data.partition;      // in half-roll unit
+  const int tp_pad_lo = tp_data.pad_low;
+  const int tp_pad_hi = tp_data.pad_hi;
+  const int tp_pad = (tp_pad_lo + tp_pad_hi) / 2;
+  const int tp_clus_width = (tp_pad_hi - tp_pad_lo + 1);
 
-  const int tp_bend = static_cast<int>(tp_data.deltaphi) * (tp_data.bend == 0 ? 1 : -1);
+  const int tp_bend = 0;  // not applicable
 
   const int tp_bx = tp_info.bx;
   const int tp_subbx = 0;   // no fine resolution timing
-  const float tp_time = 0;  // no fine resolution timing.
+  const float tp_time = 0;  // no fine resolution timing. Note: Check with Efe, Jia Fu gets this from digi directly.
 
   const auto tp_selection = tp_info.selection;
 
-  const int tp_quality = tp_data.quality;
+  // Use cluster width as quality. GE2/1 strip pitch is the same as GE1/1 strip pitch.
+  const int tp_quality = tp_clus_width;
 
   // ID scheme used in FW
   const int tp_ilink = tp_info.ilink;
 
   // Get Global Coordinates
+  // const GlobalPoint& gp = get_global_point(detgeom, detid, digi);
   const GlobalPoint& gp = this->context_.geometry_translator_.getGlobalPoint(tp);
   const float glob_phi = tp::radToDeg(gp.phi().value());
   const float glob_theta = tp::radToDeg(gp.theta().value());
@@ -68,9 +73,9 @@ void GE0TPConverter::convert(const TriggerPrimitive& tp, const TPInfo& tp_info, 
 
   // Calculate EMTF Values
   const int emtf_phi = tp::calcPhiInt(sector_, glob_phi);
-  const int emtf_bend = std::clamp(tp_bend / 2, -64, 63);  // 7-bit, signed
+  const int emtf_bend = 0;
   const int emtf_theta = tp::calcThetaInt(tp_endcap_pm, glob_theta);
-  const int emtf_qual = std::clamp(tp_quality, 0, 15);  // 4-bit, unsigned
+  const int emtf_qual = 0;
   const int emtf_site = context_.site_lut_.lookup({tp_subsystem, tp_station, tp_ring});
   const int emtf_host = context_.host_lut_.lookup({tp_subsystem, tp_station, tp_ring});
   const int emtf_zones = context_.zone_lut_.getZones(emtf_host, emtf_theta);
@@ -81,29 +86,29 @@ void GE0TPConverter::convert(const TriggerPrimitive& tp, const TPInfo& tp_info, 
   // Get flags
   const bool tp_flag_neighbor = (tp_selection == TPSelection::kNeighbor);
   const bool tp_flag_substitute = tp_info.flag_substitute;
-  const bool tp_flag_valid = true;  // given by digi, not trigger_primitive :(
+  const bool tp_flag_valid = true;  // given by digi, not trigger_primitive
 
   // Set properties
   hit.setId(tp_hit_id);
 
   hit.setRawDetId(tp_raw_id);
-  hit.setSubsystem(L1TMuon::kME0);
+  hit.setSubsystem(L1TMuon::kGEM);
   hit.setEndcap(tp_endcap_pm);
   hit.setSector(sector_);
   hit.setSubsector(tp_subsector);
   hit.setStation(tp_station);
   hit.setRing(tp_ring);
   hit.setLayer(tp_layer);
-  hit.setChamber(tp_det_id.chamber());  // Save original chamber
+  hit.setChamber(tp_chamber);
 
   hit.setCscId(tp_csc_id);
   hit.setCscFR(tp_csc_facing == csc::Facing::kRear);
 
-  hit.setStrip(tp_phiposition);
-  hit.setStripLo(tp_phiposition);
-  hit.setStripHi(tp_phiposition);
+  hit.setStrip(tp_pad);
+  hit.setStripLo(tp_pad_lo);
+  hit.setStripHi(tp_pad_hi);
 
-  hit.setWire1(tp_partition);
+  hit.setWire1(tp_roll);
   hit.setWire2(0);
 
   hit.setBend(tp_bend);

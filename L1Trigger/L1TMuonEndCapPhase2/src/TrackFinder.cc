@@ -21,6 +21,12 @@
 #include "L1Trigger/L1TMuonEndCapPhase2/interface/DAQ/ME0TPCollector.h"
 #include "L1Trigger/L1TMuonEndCapPhase2/interface/DAQ/GE0TPCollector.h"
 
+#include "L1Trigger/L1TMuonEndCapPhase2/interface/DAQ/CSCTPSelector.h"
+#include "L1Trigger/L1TMuonEndCapPhase2/interface/DAQ/RPCTPSelector.h"
+#include "L1Trigger/L1TMuonEndCapPhase2/interface/DAQ/GEMTPSelector.h"
+#include "L1Trigger/L1TMuonEndCapPhase2/interface/DAQ/ME0TPSelector.h"
+#include "L1Trigger/L1TMuonEndCapPhase2/interface/DAQ/GE0TPSelector.h"
+
 #include "L1Trigger/L1TMuonEndCapPhase2/interface/TrackFinder.h"
 
 using namespace emtf::phase2;
@@ -34,28 +40,33 @@ TrackFinder::TrackFinder(const edm::ParameterSet& i_config, edm::ConsumesCollect
   // Register Trigger Primitives
   if (this->context_.config_.csc_en_) {
     tp_collectors_.push_back(std::make_unique<CSCTPCollector>(context_, i_consumes_collector));
+    tp_selectors_[L1TMuon::kCSC] = std::make_unique<CSCTPSelector>(context_);
   }
 
   if (this->context_.config_.rpc_en_) {
     tp_collectors_.push_back(std::make_unique<RPCTPCollector>(context_, i_consumes_collector));
+    tp_selectors_[L1TMuon::kRPC] = std::make_unique<RPCTPSelector>(context_);
   }
 
   if (this->context_.config_.gem_en_) {
     tp_collectors_.push_back(std::make_unique<GEMTPCollector>(context_, i_consumes_collector));
+    tp_selectors_[L1TMuon::kGEM] = std::make_unique<GEMTPSelector>(context_);
   }
 
   if (this->context_.config_.me0_en_) {
     tp_collectors_.push_back(std::make_unique<ME0TPCollector>(context_, i_consumes_collector));
+    tp_selectors_[L1TMuon::kME0] = std::make_unique<ME0TPSelector>(context_);
   }
 
   if (this->context_.config_.ge0_en_) {
     tp_collectors_.push_back(std::make_unique<GE0TPCollector>(context_, i_consumes_collector));
+    tp_selectors_[L1TMuon::kME0] = std::make_unique<GE0TPSelector>(context_);
   }
 
   // Register Sector Processor
   for (unsigned int endcap = kMinEndcap; endcap <= kMaxEndcap; ++endcap) {
     for (unsigned int sector = kMinTrigSector; sector <= kMaxTrigSector; ++sector) {
-      sector_processors_.push_back(std::make_unique<SectorProcessor>(context_, endcap, sector));
+      sector_processors_[endcap][sector] = std::make_unique<SectorProcessor>(context_, endcap, sector);
     }
   }
 }
@@ -72,10 +83,10 @@ void TrackFinder::process(
     EMTFHitCollection& out_hits,
     EMTFTrackCollection& out_tracks,
     EMTFInputCollection& out_inputs) {
+
   // ===========================================================================
   // Clear output collections
   // ===========================================================================
-
   out_hits.clear();
   out_tracks.clear();
   out_inputs.clear();
@@ -83,133 +94,94 @@ void TrackFinder::process(
   // ===========================================================================
   // Load the event configuration
   // ===========================================================================
-
   context_.update(i_event, i_event_setup);
 
   // ===========================================================================
   // Collect trigger primitives
   // ===========================================================================
+  
+  // Get all of the trigger primitives in the endcap
+  TPCollection tpc;
+  for (auto& tp_collector : tp_collectors_) {
+    tp_collector->collect(i_event, tpc);
+  }
 
-  // Build BX Sequence
-  std::vector<int> bx_sequence;
-
-  {
-    auto min_bx = this->context_.config_.min_bx_;
-    auto delay_bx = this->context_.config_.bx_window_ - 1;
-    auto max_bx = this->context_.config_.max_bx_ + delay_bx;
-
-    for (int bx = min_bx; bx <= max_bx; ++bx) {
-      bx_sequence.push_back(bx);
+  // Select all of the TPs for each sector - this duplicates neighbor TPs
+  SectorTPCMap sector_tpc_map;
+  for (const auto& entry : tpc) {
+    const auto selector = tp_selectors_.find(entry.tp_.subsystem());
+    if (selector != tp_selectors_.end()) {
+      selector->second->select(entry, sector_tpc_map);
     }
   }
 
-  // Collect TP per BX
-  BXTPCMap bx_tpc_map;
-
-  for (auto& tp_collector : tp_collectors_) {
-    tp_collector->collect(i_event, bx_tpc_map);
+  // Group selected TPs by [endcap][sector][BX][input-link]
+  // This immitates how data goes into SectorProcessor in Firmware
+  std::map<int, std::map<int, BXILinkTPCMap>> sector_bx_ilink_tpc_maps;
+  for (auto& [endcap, sectors] : sector_tpc_map) {
+    for (auto& [sector, entries] : sectors) {
+      for (auto& entry : entries) {
+        sector_bx_ilink_tpc_maps[endcap][sector][entry.info_.bx][entry.info_.ilink].push_back(entry);
+      }
+    }
   }
 
   // Debug Info
-  if (this->context_.config_.verbosity_ > 4) {
-    int n_tp = 0;
-
-    // Loop BX
-    for (const auto& bx : bx_sequence) {
-      // Get trigger primitives for this BX
-      auto bx_tpc_map_it = bx_tpc_map.find(bx);
-      auto bx_tpc_map_end = bx_tpc_map.end();
-
-      // Short-Circuit: Empty trigger primitive collection
-      if (bx_tpc_map_it == bx_tpc_map_end) {
-        continue;
-      }
-
-      // Reference TPC
-      auto& bx_tpc = bx_tpc_map_it->second;
-
-      // Short-Circuit: Empty trigger primitive collection
-      if (bx_tpc.empty()) {
-        continue;
-      }
-
-      // Print trigger primitives
-      edm::LogInfo("L1TEMTFpp") << "==========================================================================="
-                                << std::endl;
-      edm::LogInfo("L1TEMTFpp") << "Begin TPC BX " << bx << " Dump" << std::endl;
-      edm::LogInfo("L1TEMTFpp") << "---------------------------------------------------------------------------"
-                                << std::endl;
-
-      n_tp += bx_tpc.size();
-
-      for (const auto& tp_entry : bx_tpc) {
-        tp_entry.tp_.print(std::cout);
-
-        edm::LogInfo("L1TEMTFpp") << "---------------------------------------------------------------------------"
-                                  << std::endl;
-      }
-
-      edm::LogInfo("L1TEMTFpp") << "End TPC BX " << bx << " Dump" << std::endl;
-      edm::LogInfo("L1TEMTFpp") << "==========================================================================="
-                                << std::endl;
-    }
-
-    // Print TPrimitives Summary
-    if (n_tp > 0) {
-      edm::LogInfo("L1TEMTFpp") << "Num of TriggerPrimitive: " << n_tp << std::endl;
-      edm::LogInfo("L1TEMTFpp") << "==========================================================================="
-                                << std::endl;
-    }
+  if (context_.config_.verbosity_ > 4) {
+    printDebuggingTPs(tpc, sector_bx_ilink_tpc_maps);
   }
 
   // ===========================================================================
   // Run sector processors
   // ===========================================================================
 
-  // Before event
-  for (auto& sector_processor : sector_processors_) {
-    sector_processor->configureEvent(i_event);
-  }
-
-  // Orderly loop BX
-  for (const auto& bx : bx_sequence) {
-    // Get trigger primitives for this BX
-    auto bx_tpc_map_it = bx_tpc_map.find(bx);
-    auto bx_tpc_map_end = bx_tpc_map.end();
-
-    TPCollection* bx_tpc_ptr = nullptr;
-
-    if (bx_tpc_map_it != bx_tpc_map_end) {
-      bx_tpc_ptr = &(bx_tpc_map_it->second);
-    }
-
-    // Loop over all sector processors
-    for (auto& sector_processor : sector_processors_) {
-      // Before BX
-      sector_processor->configureBx(bx);
-
-      // Select trigger primitives in BX
-      if (bx_tpc_ptr != nullptr) {
-        for (const auto& tp_entry : *bx_tpc_ptr) {
-          const auto& tp = tp_entry.tp_;
-          const auto& tp_info = tp_entry.info_;
-
-          sector_processor->select(tp, tp_info);
-        }
+  // Process each sectors complete BX/input-link collection.
+  for (const auto& [endcap, sectors] : sector_bx_ilink_tpc_maps) {
+    for (const auto& [sector, bx_ilink_tpc_map] : sectors) {
+      if (bx_ilink_tpc_map.empty()) {
+        continue;
       }
 
-      // Process trigger primitives
-      sector_processor->process(out_hits, out_tracks, out_inputs);
-    }
-
-    // Free memory: Removes BX TPCollections after all Sector Processors have selected their TPrimitives
-    if (bx_tpc_ptr != nullptr) {
-      bx_tpc_map.erase(bx_tpc_map_it);
+      auto& sector_processor = sector_processors_.at(endcap).at(sector);
+      sector_processor->configureEvent(i_event);
+      sector_processor->process(bx_ilink_tpc_map, out_hits, out_tracks, out_inputs);
     }
   }
+}
 
-  // Free memory: Drops any BX TPCollections outside of the [min bx, max bx] range
-  bx_tpc_map.clear();
+void TrackFinder::printDebuggingTPs(
+    const TPCollection& tpc,
+    const std::map<int, std::map<int, BXILinkTPCMap>>& sector_bx_ilink_tpc_maps) const {
+
+  for (const auto& entry : tpc) {
+    entry.tp_.print(std::cout);
+  }
+  edm::LogInfo("L1TEMTFpp") << "Num of TriggerPrimitive: " << tpc.size();
+
+  // Dump all receiving sectors, including those without trigger primitives.
+  for (int endcap = kMinEndcap; endcap <= kMaxEndcap; ++endcap) {
+    const auto endcap_it = sector_bx_ilink_tpc_maps.find(endcap);
+    for (int sector = kMinTrigSector; sector <= kMaxTrigSector; ++sector) {
+      std::cout << "========== Endcap " << endcap << " Sector " << sector << " ==========" << std::endl;
+      if (endcap_it == sector_bx_ilink_tpc_maps.end()) {
+        continue;
+      }
+
+      const auto sector_it = endcap_it->second.find(sector);
+      if (sector_it == endcap_it->second.end()) {
+        continue;
+      }
+
+      for (const auto& [bx, ilink_tpc_map] : sector_it->second) {
+        for (const auto& [ilink, entries] : ilink_tpc_map) {
+          std::cout << "=== BX " << bx << " Input link " << ilink << " ===" << std::endl;
+          for (const auto& entry : entries) {
+            entry.tp_.print(std::cout);
+          }
+        }
+      }
+    }
+  }
 }
 
 void TrackFinder::onJobBegin() {

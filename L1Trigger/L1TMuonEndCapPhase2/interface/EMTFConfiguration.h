@@ -29,7 +29,7 @@ namespace emtf::phase2 {
     // Trigger
     int min_bx_;
     int max_bx_;
-    int bx_window_;
+    int bx_window_;  // Retained for configuration compatibility; currently inactive.
 
     // Subsystems
     bool csc_en_;

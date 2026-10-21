@@ -12,6 +12,31 @@
 
 using namespace emtf::phase2;
 
+GEMTPSelector::GEMTPSelector(const EMTFContext& context)
+    : context_(context), endcap_(0), sector_(0) {}
+
+void GEMTPSelector::select(const TPEntry& entry, SectorTPCMap& sector_tpc_map) const {
+  emtf_assert(entry.tp_.subsystem() == L1TMuon::kGEM);
+  const auto& info = entry.info_;
+
+  // Native Sector
+  auto native_info = info;
+  native_info.selection = TPSelection::kNative;
+  native_info.ilink = calcInputLink(info.subsector, info.station, info.ring, info.csc_id, TPSelection::kNative);
+  sector_tpc_map[info.endcap][info.sector].emplace_back(entry.tp_, native_info);
+
+  // Neighbor Sector
+  const int neighbor_sector = (info.sector == kMaxTrigSector) ? kMinTrigSector : info.sector + 1;
+  if (context_.config_.include_neighbor_en_ &&
+      csc::isTPInNeighborSector(info.endcap, neighbor_sector, info.endcap, info.sector,
+                               info.subsector, info.station, info.csc_id)) {
+    auto neighbor_info = info;
+    neighbor_info.selection = TPSelection::kNeighbor;
+    neighbor_info.ilink = calcInputLink(info.subsector, info.station, info.ring, info.csc_id, TPSelection::kNeighbor);
+    sector_tpc_map[info.endcap][neighbor_sector].emplace_back(entry.tp_, neighbor_info);
+  }
+}
+
 GEMTPSelector::GEMTPSelector(const EMTFContext& context, const int& endcap, const int& sector)
     : context_(context), endcap_(endcap), sector_(sector) {}
 

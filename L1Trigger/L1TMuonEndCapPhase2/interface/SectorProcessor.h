@@ -3,6 +3,7 @@
 
 #include "L1Trigger/L1TMuonEndCapPhase2/interface/EMTFfwd.h"
 #include "L1Trigger/L1TMuonEndCapPhase2/interface/EMTFTypes.h"
+#include "L1Trigger/L1TMuonEndCapPhase2/interface/TPFilter.h"
 
 namespace emtf::phase2 {
 
@@ -14,35 +15,24 @@ namespace emtf::phase2 {
 
     void configureEvent(const edm::Event&);
 
-    void configureBx(const int&);
-
-    void select(const TriggerPrimitive&, const TPInfo&);
-
-    void process(EMTFHitCollection&, EMTFTrackCollection&, EMTFInputCollection&);
+    void process(const BXILinkTPCMap&, EMTFHitCollection&, EMTFTrackCollection&, EMTFInputCollection&);
 
   private:
     const EMTFContext& context_;
 
     int endcap_, sector_;
-    std::map<SubsystemType, std::unique_ptr<TPSelector>> tp_selectors_;
+    TPFilter tp_filter_;
     std::map<SubsystemType, std::unique_ptr<TPConverter>> tp_converters_;
 
     // Event
     const edm::Event* event_;
-    const int* bx_;
-
-    // Buffers
-    std::vector<EMTFHitCollection> bx_window_hits_;
-    std::map<SubsystemType, ILinkTPCMap> bx_ilink_tpc_maps_;
 
     // Helper functions
-    void copyTP(const ILinkTPCMap& source, ILinkTPCMap& target) const;
-
     void convertTP(const int&, const ILinkTPCMap&, EMTFHitCollection&);
 
-    void populateSegments(const std::vector<EMTFHitCollection>&, std::map<int, int>&, segment_collection_t&);
+    void populateSegments(int, const EMTFHitCollection&, std::map<int, int>&, segment_collection_t&);
 
-    void buildTracks(const std::map<int, int>&, const segment_collection_t&, const bool&, EMTFTrackCollection&);
+    void buildTracks(int, const std::map<int, int>&, const segment_collection_t&, const bool&, EMTFTrackCollection&);
   };
 
 }  // namespace emtf::phase2
