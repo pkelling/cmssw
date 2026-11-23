@@ -21,7 +21,6 @@ namespace emtf::phase2 {
   typedef L1TMuon::TriggerPrimitive TriggerPrimitive;
   typedef std::vector<TPEntry> TPCollection;
   typedef std::map<int, std::map<int, TPCollection>> SectorTPCMap; // [endcap][sector]
-  typedef std::map<int, TPCollection> BXTPCMap;
   typedef std::map<int, TPCollection> ILinkTPCMap;
   typedef std::map<int, ILinkTPCMap> BXILinkTPCMap;  // [BX][link]
 

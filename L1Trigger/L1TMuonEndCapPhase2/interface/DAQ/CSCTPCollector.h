@@ -14,7 +14,6 @@ namespace emtf::phase2 {
     ~CSCTPCollector() override = default;
 
     void collect(const edm::Event&, TPCollection&) const final;
-    void collect(const edm::Event&, BXTPCMap&) const final;
 
   private:
     const EMTFContext& context_;

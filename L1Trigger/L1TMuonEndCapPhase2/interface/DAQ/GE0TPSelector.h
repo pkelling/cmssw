@@ -12,20 +12,12 @@ namespace emtf::phase2 {
   public:
     explicit GE0TPSelector(const EMTFContext&);
 
-    explicit GE0TPSelector(const EMTFContext&, const int&, const int&);
-
     ~GE0TPSelector() override = default;
 
     void select(const TPEntry&, SectorTPCMap&) const final;
 
-    void select(const TriggerPrimitive&, TPInfo, ILinkTPCMap&) const final;
-
   private:
     const EMTFContext& context_;
-
-    int endcap_, sector_;
-
-    int getInputLink(TPInfo&) const;
 
     int calcInputLink(const int&, const TPSelection&) const;
   };

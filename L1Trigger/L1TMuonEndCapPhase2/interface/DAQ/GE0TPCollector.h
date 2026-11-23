@@ -14,7 +14,6 @@ namespace emtf::phase2 {
     ~GE0TPCollector() override = default;
 
     void collect(const edm::Event&, TPCollection&) const final;
-    void collect(const edm::Event&, BXTPCMap&) const final;
 
   private:
     const EMTFContext& context_;

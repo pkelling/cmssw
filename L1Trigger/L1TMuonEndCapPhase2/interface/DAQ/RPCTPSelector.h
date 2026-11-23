@@ -13,20 +13,12 @@ namespace emtf::phase2 {
   public:
     explicit RPCTPSelector(const EMTFContext&);
 
-    explicit RPCTPSelector(const EMTFContext&, const int&, const int&);
-
     ~RPCTPSelector() override = default;
 
     void select(const TPEntry&, SectorTPCMap&) const final;
 
-    void select(const TriggerPrimitive&, TPInfo, ILinkTPCMap&) const final;
-
   private:
     const EMTFContext& context_;
-
-    int endcap_, sector_;
-
-    int getInputLink(const TriggerPrimitive&, TPInfo&) const;
 
     int calcInputLink(const int&, const int&, const int&, const int&, const TPSelection&) const;
   };

@@ -13,8 +13,6 @@ namespace emtf::phase2 {
     virtual ~TPSelector() = default;
 
     virtual void select(const TPEntry&, SectorTPCMap&) const = 0;
-
-    virtual void select(const TriggerPrimitive& tp, TPInfo tp_info, ILinkTPCMap&) const = 0;
   };
 
 }  // namespace emtf::phase2

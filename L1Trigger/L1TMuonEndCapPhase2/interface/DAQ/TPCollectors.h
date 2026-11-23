@@ -14,7 +14,6 @@ namespace emtf::phase2 {
 
     // Collects all the trigger primitives in the event
     virtual void collect(const edm::Event&, TPCollection&) const = 0;
-    virtual void collect(const edm::Event&, BXTPCMap&) const = 0;
   };
 
 }  // namespace emtf::phase2
