@@ -11,7 +11,7 @@ namespace emtf::phase2 {
   public:
     explicit TPFilter(const EMTFContext&);
 
-    ILinkTPCMap filter(const ILinkTPCMap&) const;
+    EMTFChamberTPCMap filter(const EMTFChamberTPCMap&) const;
 
   private:
     const EMTFContext& context_;

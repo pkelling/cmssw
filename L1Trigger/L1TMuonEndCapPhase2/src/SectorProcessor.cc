@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <iostream>
 
 #include "FWCore/Framework/interface/Event.h"
@@ -56,7 +57,7 @@ void SectorProcessor::configureEvent(const edm::Event& event) {
   event_ = &event;
 }
 
-void SectorProcessor::process(const BXILinkTPCMap& bx_ilink_tpc_map,
+void SectorProcessor::process(const BXEMTFChamberTPCMap& bx_emtf_chamber_tpc_map,
                               EMTFHitCollection& out_hits,
                               EMTFTrackCollection& out_tracks,
                               EMTFInputCollection& out_inputs) {
@@ -66,15 +67,16 @@ void SectorProcessor::process(const BXILinkTPCMap& bx_ilink_tpc_map,
   std::map<int, EMTFHitCollection> bx_hit_map;
 
   // Convert and record hits for BXs within the configured range.
-  for (const auto& [bx, ilink_tpc_map] : bx_ilink_tpc_map) {
+  for (const auto& [bx, emtf_chamber_tpc_map] : bx_emtf_chamber_tpc_map) {
     if (bx < min_bx || bx > max_bx) {
       continue;
     }
 
     auto& bx_hits = bx_hit_map[bx];
 
-    // Filter TPs, then convert accepted entries into hits.
-    const auto filtered_tps = tp_filter_.filter(ilink_tpc_map);
+    // Filter TPs, prepare CSC alternate wiregroups, then convert accepted entries.
+    auto filtered_tps = tp_filter_.filter(emtf_chamber_tpc_map);
+    prepareCSCAlternateWiregroups(filtered_tps);
     convertTP(out_hits.size(), filtered_tps, bx_hits);
 
     // Record hits
@@ -134,14 +136,50 @@ void SectorProcessor::process(const BXILinkTPCMap& bx_ilink_tpc_map,
   }
 }
 
-void SectorProcessor::convertTP(const int& initial_hit_id, const ILinkTPCMap& ilink_tpc_map, EMTFHitCollection& hits) {
+void SectorProcessor::prepareCSCAlternateWiregroups(EMTFChamberTPCMap& emtf_chamber_tpc_map) const {
+  for (auto& [emtf_chamber, chamber_tpc] : emtf_chamber_tpc_map) {
+    // Collect distinct CSC wiregroups in surviving input order for this BX and EMTF chamber.
+    std::map<uint32_t, std::vector<int>> csc_chamber_wires;
+    for (const auto& entry : chamber_tpc) {
+      if (entry.tp_.subsystem() != L1TMuon::kCSC) {
+        continue;
+      }
+      auto& wires = csc_chamber_wires[entry.tp_.detId<CSCDetId>().rawId()];
+      const int wire = entry.tp_.getCSCData().keywire;
+      if (std::find(wires.begin(), wires.end(), wire) == wires.end()) {
+        wires.push_back(wire);
+      }
+    }
+
+    for (auto& entry : chamber_tpc) {
+      const auto& tp = entry.tp_;
+      auto& tp_info = entry.info_;
+      if (tp.subsystem() == L1TMuon::kCSC) {
+        tp_info.csc_first_wire = tp.getCSCData().keywire;
+        tp_info.csc_second_wire = -1;
+        // Each LCT keeps its own primary wire and uses the first other distinct
+        // wire as its alternate, including when more than two LCTs survive.
+        for (const int wire : csc_chamber_wires.at(tp.detId<CSCDetId>().rawId())) {
+          if (wire != tp_info.csc_first_wire) {
+            tp_info.csc_second_wire = wire;
+            break;
+          }
+        }
+      }
+    }
+  }
+}
+
+void SectorProcessor::convertTP(const int& initial_hit_id,
+                                const EMTFChamberTPCMap& emtf_chamber_tpc_map,
+                                EMTFHitCollection& hits) {
   EMTFHitCollection substitutes;
 
-  for (const auto& [ilink, ilink_tpc] : ilink_tpc_map) {  // loop input link trigger primitive collections
+  for (const auto& [emtf_chamber, chamber_tpc] : emtf_chamber_tpc_map) {  // Loop over EMTF chamber indices.
 
     unsigned int cnt_segments = 0;  // Enumerates each segment in the same chamber
 
-    for (const auto& tp_entry : ilink_tpc) {  // loop trigger primitives
+    for (const auto& tp_entry : chamber_tpc) {  // loop trigger primitives
 
       // Unpack Entry
       const auto& tp = tp_entry.tp_;  // const reference
@@ -275,7 +313,7 @@ void SectorProcessor::populateSegments(int bx,
     if (this->context_.config_.verbosity_ > 1) {
       edm::LogInfo("L1TEMTFpp") << std::endl
                                 << "Event: " << event_->id() << " Endcap: " << endcap_ << " Sector: " << sector_
-                                << " BX: " << bx << " Hit iLink: " << hit_chamber << " Hit iSeg: " << ch_seg
+                                << " BX: " << bx << " Hit EMTF chamber: " << hit_chamber << " Hit iSeg: " << ch_seg
                                 << " Hit Host " << hit_host << " Hit Rel BX " << (hit_bx - bx) << " Hit Timezones "
                                 << hit_timezones << std::endl;
 

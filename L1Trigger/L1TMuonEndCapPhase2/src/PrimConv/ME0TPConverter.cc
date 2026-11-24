@@ -57,7 +57,7 @@ void ME0TPConverter::convert(const TriggerPrimitive& tp, const TPInfo& tp_info, 
   const int tp_quality = tp_data.quality;
 
   // ID scheme used in FW
-  const int tp_ilink = tp_info.ilink;
+  const int tp_emtf_chamber = tp_info.emtf_chamber;
 
   // Get Global Coordinates
   const GlobalPoint& gp = this->context_.geometry_translator_.getGlobalPoint(tp);
@@ -75,13 +75,15 @@ void ME0TPConverter::convert(const TriggerPrimitive& tp, const TPInfo& tp_info, 
   const int emtf_host = context_.host_lut_.lookup({tp_subsystem, tp_station, tp_ring});
   const int emtf_zones = context_.zone_lut_.getZones(emtf_host, emtf_theta);
 
-  emtf_assert((0 <= emtf_phi) and (emtf_phi < 5040));
+  // emtf_assert((0 <= emtf_phi) and (emtf_phi < 5040)); // Pending ME0 phi range update.
   emtf_assert((1 <= emtf_theta) and (emtf_theta < 128));
 
   // Get flags
   const bool tp_flag_neighbor = (tp_selection == TPSelection::kNeighbor);
   const bool tp_flag_substitute = tp_info.flag_substitute;
-  const bool tp_flag_valid = true;  // given by digi, not trigger_primitive :(
+  const bool tp_flag_valid =
+      (v3::kHitmapCropColStart * v3::kHitmapColFactor <= emtf_phi) &&
+      (emtf_phi < v3::kHitmapCropColStop * v3::kHitmapColFactor);
 
   // Set properties
   hit.setId(tp_hit_id);
@@ -120,8 +122,8 @@ void ME0TPConverter::convert(const TriggerPrimitive& tp, const TPInfo& tp_info, 
   hit.setGlobZ(glob_z);
   hit.setGlobTime(tp_time);
 
-  hit.setEmtfChamber(tp_ilink);
-  hit.setEmtfSegment(tp_segment_id);
+  hit.setEmtfChamber(tp_emtf_chamber);
+  hit.setEmtfSegment(tp_flag_valid ? tp_segment_id : -1);
   hit.setEmtfPhi(emtf_phi);
   hit.setEmtfBend(emtf_bend);
   hit.setEmtfTheta1(emtf_theta);

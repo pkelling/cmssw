@@ -115,43 +115,43 @@ void TrackFinder::process(
     }
   }
 
-  // Group selected TPs by [endcap][sector][BX][input-link]
-  // This immitates how data goes into SectorProcessor in Firmware
-  std::map<int, std::map<int, BXILinkTPCMap>> sector_bx_ilink_tpc_maps;
+  // Group selected TPs by [endcap][sector][BX][EMTF chamber]
+  std::map<int, std::map<int, BXEMTFChamberTPCMap>> sector_bx_emtf_chamber_tpc_maps;
   for (auto& [endcap, sectors] : sector_tpc_map) {
     for (auto& [sector, entries] : sectors) {
       for (auto& entry : entries) {
-        sector_bx_ilink_tpc_maps[endcap][sector][entry.info_.bx][entry.info_.ilink].push_back(entry);
+        sector_bx_emtf_chamber_tpc_maps[endcap][sector][entry.info_.bx][entry.info_.emtf_chamber]
+            .push_back(entry);
       }
     }
   }
 
   // Debug Info
   if (context_.config_.verbosity_ > 4) {
-    printDebuggingTPs(tpc, sector_bx_ilink_tpc_maps);
+    printDebuggingTPs(tpc, sector_bx_emtf_chamber_tpc_maps);
   }
 
   // ===========================================================================
   // Run sector processors
   // ===========================================================================
 
-  // Process each sectors complete BX/input-link collection.
-  for (const auto& [endcap, sectors] : sector_bx_ilink_tpc_maps) {
-    for (const auto& [sector, bx_ilink_tpc_map] : sectors) {
-      if (bx_ilink_tpc_map.empty()) {
+  // Process each sector's complete BX and EMTF chamber collection.
+  for (const auto& [endcap, sectors] : sector_bx_emtf_chamber_tpc_maps) {
+    for (const auto& [sector, bx_emtf_chamber_tpc_map] : sectors) {
+      if (bx_emtf_chamber_tpc_map.empty()) {
         continue;
       }
 
       auto& sector_processor = sector_processors_.at(endcap).at(sector);
       sector_processor->configureEvent(i_event);
-      sector_processor->process(bx_ilink_tpc_map, out_hits, out_tracks, out_inputs);
+      sector_processor->process(bx_emtf_chamber_tpc_map, out_hits, out_tracks, out_inputs);
     }
   }
 }
 
 void TrackFinder::printDebuggingTPs(
     const TPCollection& tpc,
-    const std::map<int, std::map<int, BXILinkTPCMap>>& sector_bx_ilink_tpc_maps) const {
+    const std::map<int, std::map<int, BXEMTFChamberTPCMap>>& sector_bx_emtf_chamber_tpc_maps) const {
 
   for (const auto& entry : tpc) {
     entry.tp_.print(std::cout);
@@ -160,10 +160,10 @@ void TrackFinder::printDebuggingTPs(
 
   // Dump all receiving sectors, including those without trigger primitives.
   for (int endcap = kMinEndcap; endcap <= kMaxEndcap; ++endcap) {
-    const auto endcap_it = sector_bx_ilink_tpc_maps.find(endcap);
+    const auto endcap_it = sector_bx_emtf_chamber_tpc_maps.find(endcap);
     for (int sector = kMinTrigSector; sector <= kMaxTrigSector; ++sector) {
       std::cout << "========== Endcap " << endcap << " Sector " << sector << " ==========" << std::endl;
-      if (endcap_it == sector_bx_ilink_tpc_maps.end()) {
+      if (endcap_it == sector_bx_emtf_chamber_tpc_maps.end()) {
         continue;
       }
 
@@ -172,9 +172,9 @@ void TrackFinder::printDebuggingTPs(
         continue;
       }
 
-      for (const auto& [bx, ilink_tpc_map] : sector_it->second) {
-        for (const auto& [ilink, entries] : ilink_tpc_map) {
-          std::cout << "=== BX " << bx << " Input link " << ilink << " ===" << std::endl;
+      for (const auto& [bx, emtf_chamber_tpc_map] : sector_it->second) {
+        for (const auto& [emtf_chamber, entries] : emtf_chamber_tpc_map) {
+          std::cout << "=== BX " << bx << " EMTF chamber " << emtf_chamber << " ===" << std::endl;
           for (const auto& entry : entries) {
             entry.tp_.print(std::cout);
           }

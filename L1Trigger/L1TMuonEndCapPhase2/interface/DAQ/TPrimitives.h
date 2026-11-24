@@ -17,7 +17,7 @@ namespace emtf::phase2 {
 
     // Selection
     int bx = -999;
-    int ilink = -1;
+    int emtf_chamber = -1;  // EMTF chamber numbering (RE ring 2/3 are combined)
     TPSelection selection = kNone;
 
     // Flags

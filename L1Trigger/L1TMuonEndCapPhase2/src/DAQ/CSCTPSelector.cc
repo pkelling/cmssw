@@ -20,7 +20,7 @@ void CSCTPSelector::select(const TPEntry& entry, SectorTPCMap& sector_tpc_map) c
   // Native Sector
   auto native_info = info;
   native_info.selection = TPSelection::kNative;
-  native_info.ilink = calcInputLink(info.subsector, info.station, info.ring, info.csc_id, TPSelection::kNative);
+  native_info.emtf_chamber = calcEMTFChamber(info.subsector, info.station, info.ring, info.csc_id, TPSelection::kNative);
   sector_tpc_map[info.endcap][info.sector].emplace_back(entry.tp_, native_info);
 
   // Neighbor Sector
@@ -30,46 +30,47 @@ void CSCTPSelector::select(const TPEntry& entry, SectorTPCMap& sector_tpc_map) c
                                info.subsector, info.station, info.csc_id)) {
     auto neighbor_info = info;
     neighbor_info.selection = TPSelection::kNeighbor;
-    neighbor_info.ilink = calcInputLink(info.subsector, info.station, info.ring, info.csc_id, TPSelection::kNeighbor);
+    neighbor_info.emtf_chamber = calcEMTFChamber(info.subsector, info.station, info.ring, info.csc_id, TPSelection::kNeighbor);
     sector_tpc_map[info.endcap][neighbor_sector].emplace_back(entry.tp_, neighbor_info);
   }
 }
 
-// Returns CSC input "link". Index used by FW for unique chamber identification.
-int CSCTPSelector::calcInputLink(const int& tp_subsector,
+// Returns the sector-relative EMTF chamber.
+int CSCTPSelector::calcEMTFChamber(const int& tp_subsector,
                                  const int& tp_station,
                                  const int& tp_ring,
                                  const int& tp_csc_id,
                                  const TPSelection& tp_selection) const {
-  int ilink = -1;
+  int emtf_chamber = -1;
 
-  // Links
+  // EMTF chamber indices - based on CSC TMB numbering
   // ME1,2,3,4        : 0..17,  18..26, 27..35, 36..44
   // ME1,2,3,4 (N)    : 45..47, 48..49, 50..51, 52..53
 
+
   if (tp_selection == TPSelection::kNative) {
-    const int ilink_offset = 0;
+    const int emtf_chamber_offset = 0;
 
     if (tp_station == 1) {
-      ilink = ilink_offset + (tp_subsector - 1) * 9 + (tp_csc_id - 1);
+      emtf_chamber = emtf_chamber_offset + (tp_subsector - 1) * 9 + (tp_csc_id - 1);
     } else {
-      ilink = ilink_offset + tp_station * 9 + (tp_csc_id - 1);
+      emtf_chamber = emtf_chamber_offset + tp_station * 9 + (tp_csc_id - 1);
     }
 
-    emtf_assert((0 <= ilink) && (ilink < 45));
+    emtf_assert((0 <= emtf_chamber) && (emtf_chamber < 45));
   } else {
-    const int ilink_offset = 45;
+    const int emtf_chamber_offset = 45;
 
     if (tp_station == 1) {
-      ilink = ilink_offset + ((tp_station - 1) * 2) + (tp_csc_id - 1) / 3;
+      emtf_chamber = emtf_chamber_offset + ((tp_station - 1) * 2) + (tp_csc_id - 1) / 3;
     } else if (tp_ring == 1) {
-      ilink = ilink_offset + ((tp_station - 1) * 2) + 1;
+      emtf_chamber = emtf_chamber_offset + ((tp_station - 1) * 2) + 1;
     } else {
-      ilink = ilink_offset + ((tp_station - 1) * 2) + 2;
+      emtf_chamber = emtf_chamber_offset + ((tp_station - 1) * 2) + 2;
     }
 
-    emtf_assert((45 <= ilink) && (ilink < 54));
+    emtf_assert((45 <= emtf_chamber) && (emtf_chamber < 54));
   }
 
-  return ilink;
+  return emtf_chamber;
 }

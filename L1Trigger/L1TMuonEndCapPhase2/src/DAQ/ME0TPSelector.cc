@@ -20,41 +20,29 @@ void ME0TPSelector::select(const TPEntry& entry, SectorTPCMap& sector_tpc_map) c
   // Native Sector
   auto native_info = info;
   native_info.selection = TPSelection::kNative;
-  native_info.ilink = calcInputLink(info.subsector, info.csc_id, TPSelection::kNative);
+  native_info.emtf_chamber = calcEMTFChamber(info.csc_id, TPSelection::kNative);
   sector_tpc_map[info.endcap][info.sector].emplace_back(entry.tp_, native_info);
 
   // Neighbor Sector
   const int neighbor_sector = (info.sector == kMaxTrigSector) ? kMinTrigSector : info.sector + 1;
   if (context_.config_.include_neighbor_en_ &&
-      csc::isTPInNeighborSector(info.endcap, neighbor_sector, info.endcap, info.sector,
-                               info.subsector, info.station, info.csc_id)) {
+      info.csc_id == 3) {
     auto neighbor_info = info;
     neighbor_info.selection = TPSelection::kNeighbor;
-    neighbor_info.ilink = calcInputLink(info.subsector, info.csc_id, TPSelection::kNeighbor);
+    neighbor_info.emtf_chamber = calcEMTFChamber(info.csc_id, TPSelection::kNeighbor);
     sector_tpc_map[info.endcap][neighbor_sector].emplace_back(entry.tp_, neighbor_info);
   }
 }
 
-int ME0TPSelector::calcInputLink(const int& tp_subsector, const int& tp_csc_id, const TPSelection& tp_selection) const {
-  int ilink = -1;
-
-  // Links
-  // ME0                  : 108..113
-  // ME0 (N)              : 114
-
+int ME0TPSelector::calcEMTFChamber(const int& tp_csc_id, const TPSelection& tp_selection) const {
+  // Three ME0 chambers per sector, plus one from the preceding sector.
   if (tp_selection == TPSelection::kNative) {
-    const int ilink_offset = 108;
-
-    ilink = ilink_offset + ((tp_subsector - 1) * 3) + (tp_csc_id - 1);
-
-    emtf_assert((108 <= ilink) && (ilink < 114));
-  } else {
-    const int ilink_offset = 114;
-
-    ilink = ilink_offset;
-
-    emtf_assert(ilink == ilink_offset);
+    const int emtf_chamber = 108 + tp_csc_id;
+    emtf_assert((109 <= emtf_chamber) && (emtf_chamber <= 111));
+    return emtf_chamber;
   }
 
-  return ilink;
+  const int emtf_chamber = 112;
+  emtf_assert(tp_selection == TPSelection::kNeighbor);
+  return emtf_chamber;
 }

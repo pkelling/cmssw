@@ -57,7 +57,7 @@ void GE0TPConverter::convert(const TriggerPrimitive& tp, const TPInfo& tp_info, 
   const int tp_quality = tp_data.quality;
 
   // ID scheme used in FW
-  const int tp_ilink = tp_info.ilink;
+  const int tp_emtf_chamber = tp_info.emtf_chamber;
 
   // Get Global Coordinates
   const GlobalPoint& gp = this->context_.geometry_translator_.getGlobalPoint(tp);
@@ -122,7 +122,7 @@ void GE0TPConverter::convert(const TriggerPrimitive& tp, const TPInfo& tp_info, 
   hit.setGlobZ(glob_z);
   hit.setGlobTime(tp_time);
 
-  hit.setEmtfChamber(tp_ilink);
+  hit.setEmtfChamber(tp_emtf_chamber);
   hit.setEmtfSegment(tp_flag_valid ? tp_segment_id : -1);
   hit.setEmtfPhi(emtf_phi);
   hit.setEmtfBend(emtf_bend);

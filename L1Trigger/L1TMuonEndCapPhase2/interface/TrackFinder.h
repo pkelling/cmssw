@@ -28,7 +28,7 @@ namespace emtf::phase2 {
 
   private:
     void printDebuggingTPs(const TPCollection&,
-                           const std::map<int, std::map<int, BXILinkTPCMap>>&) const;
+                           const std::map<int, std::map<int, BXEMTFChamberTPCMap>>&) const;
 
     EMTFContext context_;
 

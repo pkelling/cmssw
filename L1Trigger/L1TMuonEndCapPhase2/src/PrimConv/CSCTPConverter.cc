@@ -73,7 +73,7 @@ void CSCTPConverter::convert(const TriggerPrimitive& tp, const TPInfo& tp_info, 
   tp_bend *= tp_endcap_pm;  // sign flip depending on endcap
 
   // ID scheme used in FW
-  const int tp_ilink = tp_info.ilink;
+  const int tp_emtf_chamber = tp_info.emtf_chamber;
 
   // Get Global Coordinates
   const GlobalPoint& gp_w1 = this->context_.geometry_translator_.getGlobalPoint(tp);
@@ -157,7 +157,7 @@ void CSCTPConverter::convert(const TriggerPrimitive& tp, const TPInfo& tp_info, 
   hit.setGlobZ(glob_z_w1);
   hit.setGlobTime(tp_time);
 
-  hit.setEmtfChamber(tp_ilink);
+  hit.setEmtfChamber(tp_emtf_chamber);
   hit.setEmtfSegment(tp_segment_id);
   hit.setEmtfPhi(emtf_phi_w1);
   hit.setEmtfBend(emtf_bend_w1);

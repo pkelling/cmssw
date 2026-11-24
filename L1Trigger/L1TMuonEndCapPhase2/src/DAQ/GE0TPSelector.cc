@@ -20,7 +20,7 @@ void GE0TPSelector::select(const TPEntry& entry, SectorTPCMap& sector_tpc_map) c
   // Native Sector
   auto native_info = info;
   native_info.selection = TPSelection::kNative;
-  native_info.ilink = calcInputLink(info.csc_id, TPSelection::kNative);
+  native_info.emtf_chamber = calcEMTFChamber(info.csc_id, TPSelection::kNative);
   sector_tpc_map[info.endcap][info.sector].emplace_back(entry.tp_, native_info);
 
   // Neighbor Sector
@@ -29,20 +29,20 @@ void GE0TPSelector::select(const TPEntry& entry, SectorTPCMap& sector_tpc_map) c
       info.csc_id == 3) {
     auto neighbor_info = info;
     neighbor_info.selection = TPSelection::kNeighbor;
-    neighbor_info.ilink = calcInputLink(info.csc_id, TPSelection::kNeighbor);
+    neighbor_info.emtf_chamber = calcEMTFChamber(info.csc_id, TPSelection::kNeighbor);
     sector_tpc_map[info.endcap][neighbor_sector].emplace_back(entry.tp_, neighbor_info);
   }
 }
 
-int GE0TPSelector::calcInputLink(const int& tp_csc_id, const TPSelection& tp_selection) const {
-  // Three physical GE0 chambers per sector, plus one from the preceding sector.
+int GE0TPSelector::calcEMTFChamber(const int& tp_csc_id, const TPSelection& tp_selection) const {
+  // Three GE0 chambers per sector, plus one from the preceding sector.
   if (tp_selection == TPSelection::kNative) {
-    const int ilink = 108 + tp_csc_id;
-    emtf_assert((109 <= ilink) && (ilink <= 111));
-    return ilink;
+    const int emtf_chamber = 108 + tp_csc_id;
+    emtf_assert((109 <= emtf_chamber) && (emtf_chamber <= 111));
+    return emtf_chamber;
   }
 
-  const int ilink = 112;
+  const int emtf_chamber = 112;
   emtf_assert(tp_selection == TPSelection::kNeighbor);
-  return ilink;
+  return emtf_chamber;
 }

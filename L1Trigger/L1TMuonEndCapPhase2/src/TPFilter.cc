@@ -10,11 +10,11 @@ using namespace emtf::phase2;
 
 TPFilter::TPFilter(const EMTFContext& context) : context_(context) {}
 
-ILinkTPCMap TPFilter::filter(const ILinkTPCMap& ilink_tpc_map) const {
+EMTFChamberTPCMap TPFilter::filter(const EMTFChamberTPCMap& emtf_chamber_tpc_map) const {
   GEMCoincidenceMap gem_coincidences;
 
   // Gather GEM coincidence candidates before filtering either layer.
-  for (const auto& [ilink, tpc] : ilink_tpc_map) {
+  for (const auto& [emtf_chamber, tpc] : emtf_chamber_tpc_map) {
     for (const auto& entry : tpc) {
       if (entry.tp_.subsystem() != L1TMuon::kGEM || entry.info_.layer != 2) {
         continue;
@@ -26,10 +26,10 @@ ILinkTPCMap TPFilter::filter(const ILinkTPCMap& ilink_tpc_map) const {
     }
   }
 
-  ILinkTPCMap filtered_tps;
+  EMTFChamberTPCMap filtered_tps;
 
-  // Preserve the original order, including subsystems sharing an input link.
-  for (const auto& [ilink, tpc] : ilink_tpc_map) {
+  // Preserve the original order, including subsystems sharing an EMTF chamber.
+  for (const auto& [emtf_chamber, tpc] : emtf_chamber_tpc_map) {
     for (const auto& entry : tpc) {
       auto filtered_entry = entry;
       bool accepted = true;
@@ -53,7 +53,7 @@ ILinkTPCMap TPFilter::filter(const ILinkTPCMap& ilink_tpc_map) const {
       }
 
       if (accepted) {
-        filtered_tps[ilink].push_back(filtered_entry);
+        filtered_tps[emtf_chamber].push_back(filtered_entry);
       }
     }
   }
@@ -74,11 +74,6 @@ bool TPFilter::acceptCSC(const TPEntry& entry) const {
 bool TPFilter::acceptRPC(const TPEntry& entry) const {
   const auto& info = entry.info_;
   const auto data = entry.tp_.getRPCData();
-
-  // Exclude overlap chambers RE1/3 and RE2/3.
-  if (info.station <= 2 && info.ring == 3) {
-    return false;
-  }
 
   const int cluster_width = data.strip_hi - data.strip_low + 1;
   const int max_cluster_width = (info.rpc_type == rpc::Type::kiRPC) ? 6 : 4;

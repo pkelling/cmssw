@@ -20,7 +20,7 @@ namespace emtf::phase2 {
   private:
     const EMTFContext& context_;
 
-    int calcInputLink(const int&, const int&, const int&, const int&, const TPSelection&) const;
+    int calcEMTFChamber(const int&, const int&, const int&, const int&, const TPSelection&) const;
   };
 
 }  // namespace emtf::phase2

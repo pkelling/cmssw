@@ -15,7 +15,7 @@ namespace emtf::phase2 {
 
     void configureEvent(const edm::Event&);
 
-    void process(const BXILinkTPCMap&, EMTFHitCollection&, EMTFTrackCollection&, EMTFInputCollection&);
+    void process(const BXEMTFChamberTPCMap&, EMTFHitCollection&, EMTFTrackCollection&, EMTFInputCollection&);
 
   private:
     const EMTFContext& context_;
@@ -28,7 +28,9 @@ namespace emtf::phase2 {
     const edm::Event* event_;
 
     // Helper functions
-    void convertTP(const int&, const ILinkTPCMap&, EMTFHitCollection&);
+    void prepareCSCAlternateWiregroups(EMTFChamberTPCMap&) const;
+
+    void convertTP(const int&, const EMTFChamberTPCMap&, EMTFHitCollection&);
 
     void populateSegments(int, const EMTFHitCollection&, std::map<int, int>&, segment_collection_t&);
 

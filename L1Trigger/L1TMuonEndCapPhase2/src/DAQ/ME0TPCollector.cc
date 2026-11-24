@@ -18,9 +18,6 @@ ME0TPCollector::ME0TPCollector(const EMTFContext& context, edm::ConsumesCollecto
       input_token_(i_consumes_collector.consumes<ME0Tag::collection_type>(context.config_.me0_input_)) {}
 
 void ME0TPCollector::collect(const edm::Event& i_event, TPCollection& tpc) const {
-  constexpr int phiposition_q1 = 384 * 2 / 4;
-  constexpr int phiposition_q3 = 384 * 2 * 3 / 4;
-
   edm::Handle<ME0Tag::collection_type> me0_digis;
   i_event.getByToken(input_token_, me0_digis);
 
@@ -35,38 +32,25 @@ void ME0TPCollector::collect(const edm::Event& i_event, TPCollection& tpc) const
       info.bx = data.bx + context_.config_.me0_bx_shift_;
       info.endcap = (region == -1) ? 2 : region;
       info.endcap_pm = (info.endcap == 2) ? -1 : info.endcap;
-      info.station = det_id.station();
+      info.station = 1;
       info.ring = 4;
       info.layer = det_id.layer();
       info.roll = det_id.roll();
+      info.chamber = det_id.chamber();
 
-      // Map the 20-degree ME0 chamber to the CSC 10-degree chamber.
-      info.chamber = (det_id.chamber() - 1) * 2 + 1;
-      if (info.endcap == 1) {
-        if (data.phiposition < phiposition_q1) {
-          info.chamber = csc::getNext10DegChamber(info.chamber);
-        } else if (data.phiposition >= phiposition_q3) {
-          info.chamber = csc::getPrev10DegChamber(info.chamber);
-        }
-      } else {
-        if (data.phiposition < phiposition_q1) {
-          info.chamber = csc::getPrev10DegChamber(info.chamber);
-        } else if (data.phiposition >= phiposition_q3) {
-          info.chamber = csc::getNext10DegChamber(info.chamber);
-        }
-      }
+      // ME0 uses the same sector assignment as a 20-degree CSC chamber (Station 2, ring 1)
+      info.sector = csc::getTriggerSector(2, 1, info.chamber);
+      info.subsector = 0;
+      info.csc_id = csc::getId(2, 1, info.chamber);
+      info.csc_facing = csc::Facing::kNone;
 
-      info.sector = csc::getTriggerSector(info.station, info.ring, info.chamber);
-      info.subsector = csc::getTriggerSubsector(info.station, info.chamber);
-      info.csc_id = csc::getId(info.station, info.ring, info.chamber);
-      info.csc_facing = csc::getFaceDirection(info.station, info.ring, info.chamber);
 #ifdef EMTF_ALLOW_ASSERT
       emtf_assert(kMinEndcap <= info.endcap && info.endcap <= kMaxEndcap);
       emtf_assert(kMinTrigSector <= info.sector && info.sector <= kMaxTrigSector);
-      emtf_assert(1 <= info.subsector && info.subsector <= 2);
+      emtf_assert(info.subsector == 0);
       emtf_assert(info.station == 1);
       emtf_assert(info.ring == 4);
-      emtf_assert(1 <= info.chamber && info.chamber <= 36);
+      emtf_assert(1 <= info.chamber && info.chamber <= 18);
       emtf_assert(1 <= info.csc_id && info.csc_id <= 3);
       emtf_assert(0 <= data.phiposition && data.phiposition <= 767);
       emtf_assert(0 <= data.partition && data.partition <= 15);

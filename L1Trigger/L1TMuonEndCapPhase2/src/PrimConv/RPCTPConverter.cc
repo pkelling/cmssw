@@ -76,7 +76,7 @@ void RPCTPConverter::convert(const TriggerPrimitive& tp, const TPInfo& tp_info, 
   }
 
   // ID scheme used in FW
-  const int tp_ilink = tp_info.ilink;
+  const int tp_emtf_chamber = tp_info.emtf_chamber;
 
   // Get Global Coordinates
   float glob_phi;
@@ -157,7 +157,7 @@ void RPCTPConverter::convert(const TriggerPrimitive& tp, const TPInfo& tp_info, 
   hit.setGlobZ(glob_z);
   hit.setGlobTime(tp_time);
 
-  hit.setEmtfChamber(tp_ilink);
+  hit.setEmtfChamber(tp_emtf_chamber);
   hit.setEmtfSegment(tp_segment_id);
   hit.setEmtfPhi(emtf_phi);
   hit.setEmtfBend(emtf_bend);

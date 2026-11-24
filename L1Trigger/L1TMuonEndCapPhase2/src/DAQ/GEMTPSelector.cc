@@ -20,7 +20,7 @@ void GEMTPSelector::select(const TPEntry& entry, SectorTPCMap& sector_tpc_map) c
   // Native Sector
   auto native_info = info;
   native_info.selection = TPSelection::kNative;
-  native_info.ilink = calcInputLink(info.subsector, info.station, info.ring, info.csc_id, TPSelection::kNative);
+  native_info.emtf_chamber = calcEMTFChamber(info.subsector, info.station, info.ring, info.csc_id, TPSelection::kNative);
   sector_tpc_map[info.endcap][info.sector].emplace_back(entry.tp_, native_info);
 
   // Neighbor Sector
@@ -30,45 +30,45 @@ void GEMTPSelector::select(const TPEntry& entry, SectorTPCMap& sector_tpc_map) c
                                info.subsector, info.station, info.csc_id)) {
     auto neighbor_info = info;
     neighbor_info.selection = TPSelection::kNeighbor;
-    neighbor_info.ilink = calcInputLink(info.subsector, info.station, info.ring, info.csc_id, TPSelection::kNeighbor);
+    neighbor_info.emtf_chamber = calcEMTFChamber(info.subsector, info.station, info.ring, info.csc_id, TPSelection::kNeighbor);
     sector_tpc_map[info.endcap][neighbor_sector].emplace_back(entry.tp_, neighbor_info);
   }
 }
 
-int GEMTPSelector::calcInputLink(const int& tp_subsector,
+int GEMTPSelector::calcEMTFChamber(const int& tp_subsector,
                                  const int& tp_station,
                                  const int& tp_ring,
                                  const int& tp_csc_id,
                                  const TPSelection& tp_selection) const {
-  int ilink = -1;
+  int emtf_chamber = -1;
 
-  // Links
+  // EMTF chamber indices
   // RE1,2,3,4 + GE1,2        : 54..71, 72..80, 81..89, 90..98
   // RE1,2,3,4 + GE1,2 (N)    : 99..101, 102..103, 104..105, 106..107
 
   if (tp_selection == TPSelection::kNative) {
-    const int ilink_offset = 54;
+    const int emtf_chamber_offset = 54;
 
     if (tp_station == 1) {
-      ilink = ilink_offset + (tp_subsector - 1) * 9 + (tp_csc_id - 1);
+      emtf_chamber = emtf_chamber_offset + (tp_subsector - 1) * 9 + (tp_csc_id - 1);
     } else {
-      ilink = ilink_offset + tp_station * 9 + (tp_csc_id - 1);
+      emtf_chamber = emtf_chamber_offset + tp_station * 9 + (tp_csc_id - 1);
     }
 
-    emtf_assert((54 <= ilink) && (ilink < 99));
+    emtf_assert((54 <= emtf_chamber) && (emtf_chamber < 99));
   } else {
-    const int ilink_offset = 99;
+    const int emtf_chamber_offset = 99;
 
     if (tp_station == 1) {
-      ilink = ilink_offset + ((tp_station - 1) * 2) + ((tp_csc_id - 1) / 3);
+      emtf_chamber = emtf_chamber_offset + ((tp_station - 1) * 2) + ((tp_csc_id - 1) / 3);
     } else if (tp_ring == 1) {
-      ilink = ilink_offset + ((tp_station - 1) * 2) + 1;
+      emtf_chamber = emtf_chamber_offset + ((tp_station - 1) * 2) + 1;
     } else {
-      ilink = ilink_offset + ((tp_station - 1) * 2) + 2;
+      emtf_chamber = emtf_chamber_offset + ((tp_station - 1) * 2) + 2;
     }
 
-    emtf_assert((99 <= ilink) && (ilink < 108));
+    emtf_assert((99 <= emtf_chamber) && (emtf_chamber < 108));
   }
 
-  return ilink;
+  return emtf_chamber;
 }
